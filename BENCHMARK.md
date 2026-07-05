@@ -200,6 +200,67 @@ default HF path is unchanged.
 - 复现 + 完整结果见 [rwkv7-hf-adapter-ascend/ASCEND_RESULTS.md](https://github.com/dsadsasdaddas/rwkv7-hf-adapter-ascend/blob/wangyue/ascend-2x-albatross/ASCEND_RESULTS.md)
 - 注:速度用**随机权重**(910B 服务器被墙下不到真实模型),速度数字有效、输出质量未验。单序列延迟(B=1, 25–323 tok/s)未达 2×(需 GEMV-Cube 融合,多月工程)。
 
+## AMD / ROCm status (gfx1100 RDNA 3)
+
+Validation on 2026-07-05. Full results in `bench/results_amd_rocm.jsonl`.
+
+- **GPU**: 1× AMD Radeon Graphics (device ID 0x744b, gfx1100 RDNA 3), ROCm 7.2.4, Driver 6.14.14
+- **Runtime**: Python 3.12.3, PyTorch 2.10.0+rocm7.2.4, Transformers 5.12.1, FLA 0.5.1, bitsandbytes 0.49.2, Triton 3.6.0+rocm7.2.4
+- **Model**: rwkv7-g1d-0.1b, fp16, `hidden_size=768`, `num_hidden_layers=12`
+
+### Native / no-FLA path (RWKV7_NATIVE_MODEL=1)
+
+| Axis | Prefill | Decode | Peak VRAM |
+|---|---|---|---|
+| speed_mem (p128/d16) | 90 tok/s | 133 tok/s | 475 MB |
+| batch_sweep bsz=1 (p128/d16) | 49 tok/s | 131 tok/s | 1313 MB |
+| batch_sweep bsz=4 (p128/d16) | 180 tok/s | 457 tok/s | 3902 MB |
+| native mm8 (p~10/d16) | — | 45 tok/s | 352 MB |
+| native mm4 (p~10/d16) | — | 44 tok/s | 302 MB |
+
+### FLA backend (fused_recurrent)
+
+| Axis | Prefill | Decode (forward) | Decode (fast_token) | Peak VRAM |
+|---|---|---|---|---|
+| speed_mem (p128/d16) | 5911 tok/s | 68 tok/s | 163 tok/s | 450 MB |
+| batch_sweep bsz=1 (p128/d16) | 4997 tok/s | 67 tok/s | 163 tok/s | 598 MB |
+| batch_sweep bsz=4 (p128/d16) | 17721 tok/s | 259 tok/s | 611 tok/s | 1043 MB |
+| long prompt p512/d128 | 22615 tok/s | 66 tok/s | — | 473 MB |
+| long prompt p1024/d128 | 39116 tok/s | 66 tok/s | — | 725 MB |
+
+### Training smoke
+
+| Test | Status |
+|---|---|
+| PEFT LoRA | PASS (loss=2.68, 72 grads) |
+| HF Trainer (native/no-FLA) | PASS (loss=1.73) |
+| HF Trainer (FLA) | PASS (loss=1.73) |
+| TRL SFT (FLA) | PASS (loss=1.81) |
+| TRL GRPO (FLA) | PASS (trainable delta OK) |
+| TRL DPO (FLA) | FAIL (NaN loss, NOT ROCm-specific) |
+| TRL SFT (native) | FAIL (NativeRWKV7Model missing HF forward) |
+
+### Quantization
+
+| Backend | Model Footprint | Peak VRAM |
+|---|---|---|
+| fp16 | 182 MB | 475 MB |
+| bnb 8bit | 283 MB | 378 MB |
+| bnb 4bit | 243 MB | 341 MB |
+| native mm8 | — | 352 MB |
+| native mm4 | — | 302 MB |
+
+### Key findings
+
+- **FLA fully works on ROCm**: both chunk and fused_recurrent modes pass load/forward/generate/training.
+- **Triton kernels detected available** (`dplr_chunk_scan_triton_available()` → True).
+- **rwkv7_forward_token (fast_token) API** achieves 163 tok/s vs 68 tok/s with `forward` API.
+- **Native/no-FLA path** also works end-to-end (load, generate, PEFT, Trainer).
+- **FLA prefill is ~60× faster than native** on ROCm (chunk-parallel prefill vs sequential).
+- **bnb quant works** but a) uses `memory` skip policy on ROCm, b) slower than fp16.
+- **DPO NaN** confirmed NOT ROCm-specific (same test produces NaN on other platforms with small models).
+- **Multi-GPU not validated**: only 1 GPU visible to PyTorch on this ROCm setup.
+
 ## Acceptance targets for 0.1B smoke baseline
 
 ### 1. Precision

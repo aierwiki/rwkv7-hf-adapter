@@ -251,9 +251,11 @@ def patch_hf_metadata(output: Path) -> None:
     }
     cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
 
+    vocab_file = output / "rwkv_vocab_v20230424.txt"
     tok_cfg = {
         "tokenizer_class": "RWKV7Tokenizer",
         "auto_map": {"AutoTokenizer": ["tokenization_rwkv7.RWKV7Tokenizer", None]},
+        "vocab_file": str(vocab_file.resolve()) if vocab_file.exists() else "rwkv_vocab_v20230424.txt",
         "model_vocab_size": int(cfg.get("vocab_size", 65536)),
         "pad_token": "<|padding|>",
         "eos_token": "<|endoftext|>",
@@ -307,6 +309,11 @@ def convert(args: argparse.Namespace) -> None:
         vocab = None
     copy_adapter_files(output, vocab)
     patch_hf_metadata(output)
+    vocab_path = output / "rwkv_vocab_v20230424.txt"
+    if not vocab_path.exists():
+        print("NOTE: rwkv_vocab_v20230424.txt not found in output. Download it from")
+        print("  https://github.com/BlinkDL/RWKV-LM/blob/main/RWKV-v7/rwkv_vocab_v20230424.txt")
+        print("  and place it in the output directory before loading the tokenizer.")
     print(f"Saved HF RWKV-7 model to: {output}")
 
 

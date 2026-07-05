@@ -38,7 +38,7 @@ V100 是开发与回归基线。目标不是「一张卡能跑」,而是常见�
 | RTX A6000 / Ampere sm_86 | **Issue #115 验证完成** | 1×RTX A6000 48GB:0.1B core smoke、0.4B/1.5B/2.9B/7.2B fp16/bf16 smoke + batch sweep、bnb W8/W4 功能/显存、native mm8/mm4 decode telemetry、Trainer/SFT/DPO/resume 通过;2×RTX A6000:ZeRO-2/3 base + resume 到 2.9B 通过。量化速度未达标,见 BENCHMARK A6000 段。 |
 | H100 / Hopper | 待补 | 高端吞吐、bf16、量化、大模型行。 |
 | Pascal / 老 NVIDIA | GTX 1080 Ti smoke 已补 | 0.1B fp16 默认 native/no-FLA fallback、bnb 8/4-bit 量化加载与 decode speed、native mm8/mm4 decode speed、bench_speed、bsz 1/2/4 batch sweep 通过;0.4B fp16 bench_speed 通过;训练未跑。bnb 慢于 fp16,但 native mm8/mm4 在 `lm_head` 量化下接近 fp16 decode。 |
-| AMD / ROCm | 开放 | 先做 native / 无 FLA 纯 PyTorch 兼容,再考虑 kernel。 |
+| AMD / ROCm | 基础验证通过 | gfx1100 RDNA 3 + ROCm 7.2.4: native/no-FLA 全路径通过(load/generate/PEFT/Trainer);FLA chunk + fused_recurrent 通过(load/generate/PEFT/Trainer/SFT/GRPO);Triton kernel 可用;bnb W8/W4 通过;DPO NaN(非 ROCm 特有);多卡未验。详见 [`BENCHMARK.md`](BENCHMARK.md) § AMD / ROCm。 |
 | Apple Silicon / MPS | 初始可跑 | 见 [`docs/hardware/APPLE_SILICON.md`](docs/hardware/APPLE_SILICON.md):native/no-FLA 安装、MPS probe、0.1B/0.4B smoke、tiny train/PEFT/Trainer、0.1B/0.4B PEFT LoRA/Trainer/SFT/DPO/GRPO 命令、0.4B generation sweep 到 512、1.5B fp16 inference/sweep 到 prompt512/new8 和 fp32 manual/Trainer/TRL PEFT LoRA 1/2/3/5/10-step 行、初始 MLX recurrent reference + session decode smoke、RafaelUI MLX/Metal 后续参考。 |
 | CPU fallback | 部分 / 实验 | 保持无 CUDA import + tiny native 测试绿灯。 |
 
